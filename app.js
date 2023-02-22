@@ -36,6 +36,13 @@ const item3 = new itemModel({
 
 const defaultItems = [item1, item2, item3];
 
+const listSchema = {
+  name: String,
+  items: [itemsSchema],
+};
+
+const ListModel = mongoose.model("List", listSchema);
+
 app.get("/", function (req, res) {
   itemModel.find({}, (err, dbItems) => {
     if (err) {
@@ -59,15 +66,70 @@ app.get("/", function (req, res) {
 
 app.post("/", function (req, res) {
   const itemName = req.body.newItem;
+  const listName = req.body.list;
+
   const item = new itemModel({
     name: itemName,
   });
-  item.save();
-  res.redirect("/");
+
+  if (listName === "To-Do App") {
+    item.save();
+    res.redirect("/");
+  } else {
+    ListModel.findOne({ name: listName }, (err, foundList) => {
+      foundList.items.push(item);
+      foundList.save();
+      res.redirect("/" + listName);
+    });
+  }
 });
 
-app.get("/work", function (req, res) {
-  res.render("list", { listTitle: "Work List", newListItems: workItems });
+app.post("/delete", (req, res) => {
+  const checkedItemId = req.body.checkbox;
+  const listName = req.body.listName;
+
+  if (listName === "To-Do App") {
+    itemModel.findByIdAndRemove(checkedItemId, (err) => {
+      if (!err) {
+        console.log("Item Deleted");
+        res.redirect("/");
+      }
+    });
+  } else {
+    ListModel.findOneAndUpdate(
+      { name: listName },
+      { $pull: { items: { _id: checkedItemId } } },
+      (err, foundList) => {
+        if (!err) {
+          res.redirect("/" + listName);
+        }
+      }
+    );
+  }
+});
+
+app.get("/:customListName", (req, res) => {
+  customListName = req.params.customListName;
+
+  ListModel.findOne({ name: customListName }, (err, foundList) => {
+    if (!err) {
+      if (!foundList) {
+        //create a new list
+        const list = new ListModel({
+          name: customListName,
+          items: defaultItems,
+        });
+        list.save();
+        res.redirect("/" + customListName);
+      } else {
+        //Show an existing list
+        res.render("list", {
+          listTitle: foundList.name,
+          newListItems: foundList.items,
+        });
+      }
+    }
+  });
 });
 
 app.get("/about", function (req, res) {
